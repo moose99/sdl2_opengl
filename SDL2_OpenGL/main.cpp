@@ -1,3 +1,7 @@
+
+#define GL3_PROTOTYPES 1
+#include "GL/glew.h"
+
 #include "sdl2_util.h"
 
 const Uint8* gCurrentKeyStates = nullptr;
@@ -8,9 +12,39 @@ class Game
 {
 private:
 	SDL_Window *window = nullptr;
-	SDL_Renderer *renderer = nullptr;
-	TTF_Font *font15 = nullptr;
-	SDL_Texture *textLives = nullptr;
+	SDL_GLContext glContext;
+
+	//
+	// init openGL stuff for SDL
+	// return -1 on error
+	//
+	int initOpenGLAttrs()
+	{
+		// TODO - set this to enable GLES for mobile
+		// Set our OpenGL version.
+		// SDL_GL_CONTEXT_CORE gives us only the newer version, deprecated functions are disabled
+		if (SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE) != 0)
+		{
+			return -1;
+		}
+
+		// Set up so that we use version 3.2 of OpenGL.
+		// 3.2 is part of the modern versions of OpenGL, but most video cards whould be able to run it
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+
+		// Turn on double buffering with a 24bit Z buffer.
+		if (SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1) != 0)
+		{
+			return -1;
+		}
+		if (SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24) != 0)
+		{
+			return -1;	
+		}
+
+		return 0;	// ok
+	}
 
 public:
 	Game()	{ }
@@ -25,16 +59,14 @@ public:
 			return -1;
 		}
 
-		// init TTF system
-		if (TTF_Init() != 0)
+		if (initOpenGLAttrs() < 0)
 		{
-			logSDLError(std::cout, "TTF_Init");
-			SDL_Quit();
+			logSDLError(std::cout, "initOpenGLAttrs");
 			return -1;
 		}
 
 		// Create window
-		window = SDL_CreateWindow("SDL2_OPENGL", 100, 100, wndWidth, wndHeight, SDL_WINDOW_SHOWN);
+		window = SDL_CreateWindow("SDL2_OPENGL", 100, 100, wndWidth, wndHeight, SDL_WINDOW_OPENGL);
 		if (window == nullptr)
 		{
 			logSDLError(std::cout, "CreateWindow");
@@ -42,49 +74,24 @@ public:
 			return -1;
 		}
 
-		// create renderer
-		renderer = SDL_CreateRenderer(window, -1,
-			SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-		if (renderer == nullptr)
+		glContext = SDL_GL_CreateContext(window);
+		if (glContext == nullptr)
 		{
-			logSDLError(std::cout, "CreateRenderer");
-			SDL_DestroyWindow(window);
-			SDL_Quit();
-			return -1;
-		}
-		if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0)
-		{
-			logSDLError(std::cout, "SetRenderDrawBlendMode");
-			SDL_DestroyWindow(window);
-			SDL_Quit();
 			return -1;
 		}
 
-		//Open the font
-		font15 = TTF_OpenFont("assets/calibri.ttf", 15);
-		if (font15 == nullptr)
-		{
-			logSDLError(std::cout, "TTF_OpenFont");
-			return -1;
-		}
+		// This makes our buffer swap syncronized with the monitor's vertical refresh
+		SDL_GL_SetSwapInterval(1);
 
-		SDL_Color white = { 255, 255, 255, 255 };
-		textLives = createText("Lives: 3", font15, white, renderer);
-		if (textLives == nullptr)
-		{
-			SDL_DestroyRenderer(renderer);
-			SDL_DestroyWindow(window);
-			TTF_Quit();
-			SDL_Quit();
-			return -1;
-		}
+		// This tells OpenGL that we want to use OpenGL 3.0 stuff and later.
+		glewExperimental = GL_TRUE;
+		glewInit();
 
 		return 0;	// ok
 	}
 
 	void run()
 	{
-		SDL_Color white = { 255, 255, 255, 255 };
 		SDL_Event e;
 		bool quit = false;
 		while (!quit)
@@ -101,34 +108,41 @@ public:
 
 			// key state
 			gCurrentKeyStates = SDL_GetKeyboardState(NULL);
-
-			/* Select the color for drawing. */
-			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-			//First clear the renderer with the draw color
-			SDL_RenderClear(renderer);
-
 			if (gCurrentKeyStates[SDL_SCANCODE_ESCAPE])
 				break;
 
-//			manager.update();
-//			manager.draw(renderer);
+#if 0
+			// clear back buffer to black
+			glClearColor(0.0, 0.0, 0.0, 1.0);
+			glClear(GL_COLOR_BUFFER_BIT);
 
-			SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-			SDL_Rect rect = { 200,200,	// x, y
-				100,100 };				// w, h
-			SDL_RenderFillRect(renderer, &rect);
 
-			renderTexture(textLives, renderer, 10, 10);
+			// draw red gl rect
+			// Draw a Red 1x1 Square centered at origin
+			glBegin(GL_QUADS);              // Each set of 4 vertices form a quad
+			glColor3f(1.0f, 0.0f, 0.0f); // Red
+			glVertex2f(-0.5f, -0.5f);    // x, y
+			glVertex2f(0.5f, -0.5f);
+			glVertex2f(0.5f, 0.5f);
+			glVertex2f(-0.5f, 0.5f);
+			glEnd();
 
 			//Update the screen
-			SDL_RenderPresent(renderer);
+			SDL_GL_SwapWindow(window);
+
+#endif
+
+			// Set background color as cornflower blue
+			glClearColor(0.39f, 0.58f, 0.93f, 1.f);
+			// Clear color buffer
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			// Update window with OpenGL rendering
+			SDL_GL_SwapWindow(window);
 		}
 
 
 		// cleanup
-		TTF_CloseFont(font15);
-		SDL_DestroyTexture(textLives);
-		SDL_DestroyRenderer(renderer);
+		SDL_GL_DeleteContext(glContext);
 		SDL_DestroyWindow(window);
 		SDL_Quit();
 	}
