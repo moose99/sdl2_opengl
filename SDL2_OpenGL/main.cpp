@@ -8,11 +8,22 @@ const Uint8* gCurrentKeyStates = nullptr;
 
 constexpr unsigned int wndWidth{ 800 }, wndHeight{ 600 };
 
+// An array of 3 vectors which represents 3 vertices
+static const GLfloat g_vertex_buffer_data[] = {
+	-1.0f, -1.0f, 0.0f,
+	1.0f, -1.0f, 0.0f,
+	0.0f,  1.0f, 0.0f,
+};
+
 class Game
 {
 private:
 	SDL_Window *window = nullptr;
 	SDL_GLContext glContext;
+
+	GLuint VertexArrayID;
+	// This will identify our vertex buffer
+	GLuint vertexbuffer;
 
 	//
 	// init openGL stuff for SDL
@@ -80,12 +91,26 @@ public:
 			return -1;
 		}
 
-		// This makes our buffer swap syncronized with the monitor's vertical refresh
-		SDL_GL_SetSwapInterval(1);
-
 		// This tells OpenGL that we want to use OpenGL 3.0 stuff and later.
 		glewExperimental = GL_TRUE;
 		glewInit();
+
+		// create a Vertex Array Object and set it as the current one :
+		glGenVertexArrays(1, &VertexArrayID);
+		glBindVertexArray(VertexArrayID);
+
+		// This makes our buffer swap syncronized with the monitor's vertical refresh
+		SDL_GL_SetSwapInterval(1);
+
+		//
+		// create triangle buffer
+		//
+		// Generate 1 buffer, put the resulting identifier in vertexbuffer
+		glGenBuffers(1, &vertexbuffer);
+		// The following commands will talk about our 'vertexbuffer' buffer
+		glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+		// Give our vertices to OpenGL.
+		glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
 
 		return 0;	// ok
 	}
@@ -111,35 +136,32 @@ public:
 			if (gCurrentKeyStates[SDL_SCANCODE_ESCAPE])
 				break;
 
-#if 0
-			// clear back buffer to black
-			glClearColor(0.0, 0.0, 0.0, 1.0);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-
-			// draw red gl rect
-			// Draw a Red 1x1 Square centered at origin
-			glBegin(GL_QUADS);              // Each set of 4 vertices form a quad
-			glColor3f(1.0f, 0.0f, 0.0f); // Red
-			glVertex2f(-0.5f, -0.5f);    // x, y
-			glVertex2f(0.5f, -0.5f);
-			glVertex2f(0.5f, 0.5f);
-			glVertex2f(-0.5f, 0.5f);
-			glEnd();
-
-			//Update the screen
-			SDL_GL_SwapWindow(window);
-
-#endif
-
 			// Set background color as cornflower blue
 			glClearColor(0.39f, 0.58f, 0.93f, 1.f);
 			// Clear color buffer
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			//
+			// draw triangle
+			//
+			// 1st attribute buffer : vertices
+			glEnableVertexAttribArray(0);
+			glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
+			glVertexAttribPointer(
+				0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
+				3,                  // size
+				GL_FLOAT,           // type
+				GL_FALSE,           // normalized?
+				0,                  // stride
+				(void*)0            // array buffer offset
+			);
+			// Draw the triangle !
+			glDrawArrays(GL_TRIANGLES, 0, 3); // Starting from vertex 0; 3 vertices total -> 1 triangle
+			glDisableVertexAttribArray(0);
+
 			// Update window with OpenGL rendering
 			SDL_GL_SwapWindow(window);
 		}
-
 
 		// cleanup
 		SDL_GL_DeleteContext(glContext);
